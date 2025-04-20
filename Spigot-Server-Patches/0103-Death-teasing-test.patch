@@ -1,0 +1,21 @@
+From 55acce1a0f8f298d7ca83d39368a0a2640e460f2 Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Sat, 12 Apr 2025 17:19:13 +0800
+Subject: [PATCH] Death teasing test
+
+
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index 0c49a256c..ce919acac 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -429,6 +429,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+         if (deathMessage != null && deathMessage.length() > 0 && this.world.getGameRules().getBoolean("showDeathMessages")) { // TODO: allow plugins to override?
+             if (deathMessage.equals(deathmessage)) {
+                 this.server.getPlayerList().sendMessage(chatmessage);
++                this.server.getPlayerList().sendMessage(org.bukkit.craftbukkit.util.CraftChatMessage.fromString("菜就多练"));
+             } else {
+                 this.server.getPlayerList().sendMessage(org.bukkit.craftbukkit.util.CraftChatMessage.fromString(deathMessage));
+             }
+-- 
+2.45.2.windows.1
+
