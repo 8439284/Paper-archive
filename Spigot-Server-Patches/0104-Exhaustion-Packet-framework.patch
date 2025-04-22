@@ -1,0 +1,193 @@
+From 0f9b87d7331d573b602687fd67e98c53d9b90d49 Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Sun, 20 Apr 2025 16:10:29 +0800
+Subject: [PATCH] Exhaustion Packet framework
+
+
+diff --git a/pom.xml b/pom.xml
+index 644305e68..d1d621eed 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -225,24 +225,43 @@
+                     </execution>
+                 </executions>
+             </plugin>
+-            <!-- Gotta go after shade plugin -->
+-            <plugin>
+-                <groupId>net.md-5</groupId>
+-                <artifactId>specialsource-maven-plugin</artifactId>
+-		<version>1.2.3</version> <!-- paper - bump log4j -->
+-                <executions>
+-                    <execution>
+-                        <phase>package</phase>
+-                        <goals>
+-                            <goal>remap</goal>
+-                        </goals>
+-                        <configuration>
+-                            <srgIn>${project.basedir}/deprecation-mappings.csrg</srgIn>
+-                            <accessIn>${project.basedir}/deprecation-mappings.at</accessIn>
+-                        </configuration>
+-                    </execution>
+-                </executions>
+-            </plugin>
++<!--            &lt;!&ndash; Gotta go after shade plugin &ndash;&gt;-->
++<!--            <plugin>-->
++<!--                <groupId>net.md-5</groupId>-->
++<!--                <artifactId>specialsource-maven-plugin</artifactId>-->
++<!--		<version>1.2.3</version> &lt;!&ndash; paper - bump log4j &ndash;&gt;-->
++<!--                <executions>-->
++<!--                    <execution>-->
++<!--                        <phase>package</phase>-->
++<!--                        <goals>-->
++<!--                            <goal>remap</goal>-->
++<!--                        </goals>-->
++<!--                        <configuration>-->
++<!--                            <srgIn>file://${project.basedir}/deprecation-mappings.csrg</srgIn>-->
++<!--                            <accessIn>file://${project.basedir}/deprecation-mappings.at</accessIn>-->
++<!--                        </configuration>-->
++<!--                    </execution>-->
++<!--                </executions>-->
++<!--            </plugin>-->
++
++
++<!--            <plugin>-->
++<!--                <groupId>net.md-5</groupId>-->
++<!--                <artifactId>specialsource-maven-plugin</artifactId>-->
++<!--                <version>1.2.3</version>-->
++<!--                <executions>-->
++<!--                    <execution>-->
++<!--                        <phase>package</phase>-->
++<!--                        <goals>-->
++<!--                            <goal>remap</goal>-->
++<!--                        </goals>-->
++<!--                        <configuration>-->
++<!--                            <srgIn>file:///${project.basedir}/deprecation-mappings.csrg</srgIn>-->
++<!--                            <accessIn>file:///${project.basedir}/deprecation-mappings.at</accessIn>-->
++<!--                        </configuration>-->
++<!--                    </execution>-->
++<!--                </executions>-->
++<!--            </plugin>-->
+             <plugin>
+                 <groupId>org.apache.maven.plugins</groupId>
+                 <artifactId>maven-compiler-plugin</artifactId>
+diff --git a/src/main/java/net/minecraft/server/FoodMetaData.java b/src/main/java/net/minecraft/server/FoodMetaData.java
+index d0bcad676..5166a6d99 100644
+--- a/src/main/java/net/minecraft/server/FoodMetaData.java
++++ b/src/main/java/net/minecraft/server/FoodMetaData.java
+@@ -43,6 +43,14 @@ public class FoodMetaData {
+         this.e = this.foodLevel;
+         if (this.exhaustionLevel > 4.0F) {
+             this.exhaustionLevel -= 4.0F;
++
++            // Send packet to player
++            if (this.entityhuman instanceof EntityPlayer) {
++                EntityPlayer player = (EntityPlayer) this.entityhuman;
++                player.playerConnection.sendPacket(new PacketPlayOutExhaustion(this.exhaustionLevel));
++            }
++
++
+             if (this.saturationLevel > 0.0F) {
+                 this.saturationLevel = Math.max(this.saturationLevel - 1.0F, 0.0F);
+             } else if (enumdifficulty != EnumDifficulty.PEACEFUL) {
+diff --git a/src/main/java/net/minecraft/server/PacketPlayOutExhaustion.java b/src/main/java/net/minecraft/server/PacketPlayOutExhaustion.java
+new file mode 100644
+index 000000000..5741cb90c
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/PacketPlayOutExhaustion.java
+@@ -0,0 +1,17 @@
++package net.minecraft.server;
++
++// Server-side in your Paper fork
++import io.netty.buffer.Unpooled;
++
++public class PacketPlayOutExhaustion extends PacketPlayOutCustomPayload {
++
++    public PacketPlayOutExhaustion(float exhaustion) {
++        super("MC|Exhaustion", serializeData(exhaustion));
++    }
++
++    private static PacketDataSerializer serializeData(float exhaustion) {
++        PacketDataSerializer serializer = new PacketDataSerializer(Unpooled.buffer());
++        serializer.writeFloat(exhaustion);
++        return serializer;
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/PacketPlayOutUpdateHealth.java b/src/main/java/net/minecraft/server/PacketPlayOutUpdateHealth.java
+new file mode 100644
+index 000000000..1fd048788
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/PacketPlayOutUpdateHealth.java
+@@ -0,0 +1,70 @@
++package net.minecraft.server;
++
++import java.io.IOException;
++
++public class PacketPlayOutUpdateHealth implements Packet<PacketListenerPlayOut> {
++    private float a;
++    private int b;
++    private float c;
++    // Add new field for exhaustion
++    private float exhaustion;
++
++    public PacketPlayOutUpdateHealth() {
++    }
++
++    // Original constructor
++    public PacketPlayOutUpdateHealth(float health, int food, float saturation) {
++        this.a = health;
++        this.b = food;
++        this.c = saturation;
++        this.exhaustion = 0.0F; // Default value
++    }
++
++    // New constructor with exhaustion
++    public PacketPlayOutUpdateHealth(float health, int food, float saturation, float exhaustion) {
++        this.a = health;
++        this.b = food;
++        this.c = saturation;
++        this.exhaustion = exhaustion;
++    }
++
++    @Override
++    public void a(PacketDataSerializer serializer) throws IOException {
++        this.a = serializer.readFloat();
++        this.b = serializer.e();
++        this.c = serializer.readFloat();
++        // Add exhaustion to the packet
++        this.exhaustion = serializer.readFloat();
++    }
++
++    @Override
++    public void b(PacketDataSerializer serializer) throws IOException {
++        serializer.writeFloat(this.a);
++        serializer.b(this.b);
++        serializer.writeFloat(this.c);
++        // Write exhaustion to the packet
++        serializer.writeFloat(this.exhaustion);
++    }
++
++    @Override
++    public void a(PacketListenerPlayOut packetlistenerplayout) {
++        packetlistenerplayout.a(this);
++    }
++
++    // Getters for all fields
++    public float getHealth() {
++        return this.a;
++    }
++
++    public int getFoodLevel() {
++        return this.b;
++    }
++
++    public float getSaturationLevel() {
++        return this.c;
++    }
++
++    public float getExhaustionLevel() {
++        return this.exhaustion;
++    }
++}
+-- 
+2.45.2.windows.1
+
